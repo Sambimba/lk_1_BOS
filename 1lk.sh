@@ -1,14 +1,3 @@
-#!/bin/bash
- 
-# Справка
-show_help() {
-    echo "  -u, --users       Выводит перечень пользователей и их домашних директорий"
-    echo "  -p, --processes   Выводит перечень запущенных процессов"
-    echo "  -h, --help        Выводит справку"
-    echo "  -l, --log PATH    Замещает вывод на экран выводом в файл по заданному пути PATH"
-    echo "  -e, --errors PATH Замещает вывод ошибок из потока stderr в файл по заданному пути PATH"
-}
- 
 # Пользователи
 list_users() {
     awk -F: '$3>=1000 { print $1 " " $6 }' /etc/passwd | sort
@@ -26,85 +15,78 @@ check_path() {
         echo "Ошибка: Нет доступа для записи в $path" >&2
         exit 1
     fi
+} 
+# Функция для вывода справки
+print_help() {
+    echo "Использование: $0 [опции]"
+    echo "Опции:"
+    echo "  -u, --users       Вывести список пользователей и их домашних директорий"
+    echo "  -p, --processes   Вывести список запущенных процессов"
+    echo "  -l FILE, --log FILE   Перенаправить вывод в файл"
+    echo "  -e FILE, --errors FILE   Перенаправить ошибки в файл"
+    echo "  -h, --help        Показать эту справку"
 }
  
-# Основная логика скрипта
-main() {
-    local log_file=""
-    local error_file=""
+# Переменные для хранения параметров
+LOG_FILE=""
+ERRORS_FILE=""
+SHOW_USERS=false
+SHOW_PROCESSES=false
+SHOW_HELP=false
  
-    # Обработка аргументов
-    while getopts ":upl:e:h-:" opt; do
-        case ${opt} in
-            u )
-                list_users
-                ;;
-            p )
-                list_processes
-                ;;
-            l )
-                log_file="$OPTARG"
-                check_path "$log_file"
-                ;;
-            e )
-                error_file="$OPTARG"
-                check_path "$error_file"
-                ;;
-            h )
-                show_help
-                exit 0
-                ;;
-            - )
-                case $OPTARG in
-                    users )
-                        list_users
-                        ;;
-                    processes )
-                        list_processes
-                        ;;
-                    log )
-                        log_file="${!OPTIND}"; OPTIND=$(( OPTIND + 1 ))
-                        check_path "$log_file"
-                        ;;
-                    errors )
-                        error_file="${!OPTIND}"; OPTIND=$(( OPTIND + 1 ))
-                        check_path "$error_file"
-                        ;;
-                    help )
-                        show_help
-                        exit 0
-                        ;;
-                    * )
-                        echo "Неизвестный аргумент --$OPTARG" >&2
-                        show_help
-                        exit 1
-                        ;;
-                esac
-                ;;
-            \? )
-                echo "Неизвестный аргумент -$OPTARG" >&2
-                show_help
-                exit 1
-                ;;
-            : )
-                echo "Аргумент -$OPTARG требует значение" >&2
-                show_help
-                exit 1
-                ;;
-        esac
-    done
+# Обработка аргументов командной строки
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--users)
+            SHOW_USERS=true
+            shift
+            ;;
+        -p|--processes)
+            SHOW_PROCESSES=true
+            shift
+            ;;
+        -l|--log)
+            LOG_FILE="$2"
+            shift 2
+            ;;
+        -e|--errors)
+            ERRORS_FILE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            SHOW_HELP=true
+            shift
+            ;;
+        *)
+            echo "Ошибка: Неизвестный аргумент $1" >&2
+            print_help
+            exit 1
+            ;;
+    esac
+done
  
-    # Перенаправление вывода в файл, если указано
-    echo "Лог-файл: $log_file" >&2
-    if [ -n "$log_file" ]; then
-        exec > "$log_file"
-    fi
+# Перенаправление ошибок, если указано
+if [[ -n "$ERRORS_FILE" ]]; then
+    exec 2>"$ERRORS_FILE"
+fi
  
-    # Перенаправление ошибок в файл, если указано
-    if [ -n "$error_file" ]; then
-        exec 2> "$error_file"
-    fi
-}
+# Перенаправление вывода, если указано
+if [[ -n "$LOG_FILE" ]]; then
+    exec >"$LOG_FILE"
+fi
  
-# Запуск основной логики
-main "$@"
+# Выполнение запрошенных действий
+if $SHOW_HELP; then
+    print_help
+    exit 0
+fi
+ 
+if $SHOW_USERS; then
+    list_users
+fi
+ 
+if $SHOW_PROCESSES; then
+    list_processes
+fi
+ 
+exit 0
